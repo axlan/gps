@@ -12,9 +12,9 @@ import matplotlib
 import configparser
 
 import GoldCode
-from GPSData import IQData
+from GPSData import IQData, DataType
 
-global GPS_fs
+GPS_fs = 4.092e6 # Sampling Frequency [Hz]
 global GPS_verbosity 
 
 def main():
@@ -22,16 +22,15 @@ def main():
     Acquires data from default file when Acquisition.py is run directly
     '''
     # Need these to pass to importFile module
-    GPS_fs = 4.092*10**6 # Sampling Frequency [Hz]
-    numberOfMilliseconds = 14
-    sampleLength = numberOfMilliseconds*10**(-3)
+    numberOfMilliseconds = 10
+    sampleLength = numberOfMilliseconds / 1000.0
     bytesToSkip = 0#71000000
 
     data = IQData()
     # Uncomment one of these lines to choose between Launch12 or gps-sdr-sim data
 
     # /home/evan/Capstone/gps/resources/JGPS@-32.041913222
-    data.importFile('./resources/JGPS@04.559925043', GPS_fs, sampleLength, bytesToSkip)
+    data.importFile('c:/Users/jdiamond/source/repos/gps-sdr-sim/gpssim.bin', GPS_fs, sampleLength, bytesToSkip, False, DataType.S8IQ)
     #data.importFile('./resources/JGPS@-32.041913222', GPS_fs, sampleLength, bytesToSkip)
     #data.importFile('../resources/test.max', GPS_fs, sampleLength, bytesToSkip)
 
@@ -109,7 +108,7 @@ def acquire(data, block_size_ms=10, bin_list=range(-10000,10000, 100), sat_list=
         print("Searching for SV " + str(curSat) + "...")
         
         #Grab a CA Code
-        CACode = GoldCode.getAcquisitionCode(curSat, 4)
+        CACode = GoldCode.getAcquisitionCode(curSat,  GPS_fs / 1.023e6)
 
         # Repeat entire array for each ms of data sampled
         CACodeSampled = np.tile(CACode, int(data.sampleTime*1000))
@@ -137,7 +136,7 @@ def acquire(data, block_size_ms=10, bin_list=range(-10000,10000, 100), sat_list=
         _outputTable(satInfoList)
     return satInfoList
 
-def findSat(data,  code, bins, block_size_ms=10,tracking = False):
+def findSat(data,  code, bins, block_size_ms=10, tracking = False):
     '''
     Searches IQ Data for a single satellite across all specified frequencies.
 
@@ -158,9 +157,10 @@ def findSat(data,  code, bins, block_size_ms=10,tracking = False):
     object containing acquisition results for the satellite
 
     '''
-    dataBlock = data.CData[0:(4092*block_size_ms)]
-    timeBlock = data.t[0:(4092*block_size_ms)]
-    NsamplesBlock = 4092*block_size_ms
+    ms_samples = int(GPS_fs / 1000)
+    dataBlock = data.CData[0:(ms_samples*block_size_ms)]
+    timeBlock = data.t[0:(ms_samples*block_size_ms)]
+    NsamplesBlock = ms_samples*block_size_ms
 
     # Place to store current satellite information
     curSatInfo = SatStats()
@@ -191,13 +191,13 @@ def findSat(data,  code, bins, block_size_ms=10,tracking = False):
         rmsPowerdB = 10*np.log10(np.mean(resultSQ))
         resultdB = 10*np.log10(resultSQ)
 
-        codePhaseInSamples = np.argmax(resultSQ[0:4092])
+        codePhaseInSamples = np.argmax(resultSQ[0:ms_samples])
 
         # Search for secondlargest value in 1 ms worth of data
         secondLargestValue = _GetSecondLargest(resultSQ[0:int(data.sampleFreq*0.001)])
 
         # Pseudo SNR
-        firstPeak = np.amax(resultSQ[0:4092])
+        firstPeak = np.amax(resultSQ[0:ms_samples])
         peakToSecond =  10*np.log10(  firstPeak/secondLargestValue  )
 
         curSatInfo.PeakToSecond.append(peakToSecond)
@@ -231,7 +231,7 @@ def findSat(data,  code, bins, block_size_ms=10,tracking = False):
     # Get fine-frequency (If acquired):
     if curSatInfo.Acquired == True:
         # Already have a CA code that is at least 1 ms in length
-        CACode = code[0:4092] # store first ms
+        CACode = code[0:ms_samples] # store first ms
 
         # Repeat entire array 5 times for 5 ms
         code5ms = np.tile(CACode, int(5))
@@ -247,13 +247,14 @@ def GetFineFrequency(data, SatInfo, code5ms): # now passed in data class
 
     
     Ts = 1/GPS_fs
+    ms_samples =int(0.001*GPS_fs)
 
     # Medium-frequency estimation data length (1ms in book, but may need to used
     # the data length from acquisition)
     numMSmf = 1 # num ms for medium-frequency estimation
-    Nmf = int(np.ceil(numMSmf*0.001*GPS_fs))  # num of samples to use for medium-frequency estimation (and DFT)
+    Nmf = int(np.ceil(numMSmf*ms_samples))  # num of samples to use for medium-frequency estimation (and DFT)
 
-    dataMF = data.CData[0:(4092*numMSmf)]
+    dataMF = data.CData[0:(ms_samples*numMSmf)]
 
     # Create list of the three frequencies to test for medium-frequency estimation.
     k = []
@@ -276,7 +277,7 @@ def GetFineFrequency(data, SatInfo, code5ms): # now passed in data class
 
     # Get 5 ms of consecutive data, starting at beginning of CA Code
     CACodeBeginning = int(SatInfo.CodePhaseSamples)
-    data5ms = data.CData[CACodeBeginning:int(5*4092) + CACodeBeginning]
+    data5ms = data.CData[CACodeBeginning:int(5*ms_samples) + CACodeBeginning]
 
     # Get 5 ms of CA Code, with no rotation performed.
     # passed in from function (code5ms)
@@ -289,7 +290,7 @@ def GetFineFrequency(data, SatInfo, code5ms): # now passed in data class
     X = []
     PhaseAngle = []
     for i in range(0,5):
-        X.append(sum(dataCW[i*4092:(i+1)*4092]*np.exp(-2*np.pi*1j*kLargest*nTs)))
+        X.append(sum(dataCW[i*ms_samples:(i+1)*ms_samples]*np.exp(-2*np.pi*1j*kLargest*nTs)))
         PhaseAngle.append(np.arctan(np.imag(X[i])/np.real(X[i])))
         print("Magnitude: %f" %X[i])
         print("Phase Angle: %f" %PhaseAngle[i])

@@ -6,6 +6,8 @@ use with the soft correlator.
 import numpy as np
 import configparser
 import os
+from enum import Enum, auto
+import struct
 
 global d
 
@@ -110,6 +112,11 @@ class ComplexReturner:
 
         return (I1, I2, Q1, Q2)
 
+class DataType(Enum):
+    SinMagIQ = auto()
+    S8IQ = auto()
+
+
 
 class IQData:
     '''
@@ -197,7 +204,7 @@ class IQData:
 
         self.t = np.linspace(self.tStart, self.tEnd, self.Nsamples)
 
-    def importFile(self, path, fs, seconds, bytestoskip, realOnly=False):
+    def importFile(self, path, fs, seconds, bytestoskip, realOnly=False, datatype=DataType.SinMagIQ):
         '''
         imports IQ Data from a file
 
@@ -236,18 +243,19 @@ class IQData:
         StartingByte = self.bytesToSkip # Can change this if we want to discard initial samples
         TotalSamples = int(np.ceil(SampleLength/Ts))
         self.Nsamples = TotalSamples
-        TotalBytes = int(np.ceil(TotalSamples/2))
+        if datatype == DataType.SinMagIQ:
+            TotalBytes = int(np.ceil(TotalSamples/2))
+        else:
+            TotalBytes = TotalSamples * 2
         print("Total Samples to read: %d"%(TotalSamples))
         print("Total Bytes read: %d." %(TotalBytes))
-        print("Which equals %d IQ pairs." %(TotalBytes*2))
-        print("Sample Length: %f seconds." %(TotalBytes*2*Ts))
+        print("Sample Length: %f seconds." %(TotalSamples*Ts))
 
         i = 0
         # Go to requested starting position
         fHandle.seek(StartingByte)
 
-        # Read a single byte to get started
-        SingleByte = fHandle.read(1)
+        
         if realOnly: # If only processing and returning the IData
             self.IData = []
         else:
@@ -255,24 +263,30 @@ class IQData:
             self.QData = []
 
         n = 0
-        # Loop until reach EOF (will also break of exceeds requested size)
-        while SingleByte != "":
-            I1, I2, Q1, Q2 = self._byteToIQPairs(ord(SingleByte))
-            if realOnly:
-                self.IData.extend((I1, I2))
-            else:
-                self.IData.extend((I1, I2))
-                self.QData.extend((Q1, Q2))
-            i += 1 # Increment current position
-            if (i >= TotalBytes):
-                break # Stop reading bytes if will exceed requested amount of samples
+        if datatype == DataType.SinMagIQ:
+            # Read a single byte to get started
             SingleByte = fHandle.read(1)
-            
-            pct = (n/TotalBytes)*100
-            if(pct % 1 == 0):
-                print("%2.0f percent read"%pct, end = '\r')
-            n += 1
-
+            # Loop until reach EOF (will also break of exceeds requested size)
+            while SingleByte != "":
+                I1, I2, Q1, Q2 = self._byteToIQPairs(ord(SingleByte))
+                if realOnly:
+                    self.IData.extend((I1, I2))
+                else:
+                    self.IData.extend((I1, I2))
+                    self.QData.extend((Q1, Q2))
+                i += 1 # Increment current position
+                if (i >= TotalBytes):
+                    break # Stop reading bytes if will exceed requested amount of samples
+                SingleByte = fHandle.read(1)
+                
+                pct = (n/TotalBytes)*100
+                if(pct % 1 == 0):
+                    print("%2.0f percent read"%pct, end = '\r')
+                n += 1
+        else:
+            data = np.fromfile(fHandle, np.byte, TotalBytes)
+            self.IData = data[0::2]
+            self.QData = data[1::2]
 
         fHandle.close()
         print()
