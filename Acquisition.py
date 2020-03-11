@@ -14,7 +14,7 @@ import configparser
 import GoldCode
 from GPSData import IQData, DataType
 
-GPS_fs = 4.092e6 # Sampling Frequency [Hz]
+GPS_fs = 2.6e6 # Sampling Frequency [Hz]
 global GPS_verbosity 
 
 def main():
@@ -221,7 +221,7 @@ def findSat(data,  code, bins, block_size_ms=10, tracking = False):
     curSatInfo.MaxSNR = SNRList[peakToSecondMaxBin]
     curSatInfo.DopplerHz = bins[peakToSecondMaxBin]
     curSatInfo.CodePhaseSamples = codePhaseList[peakToSecondMaxBin]
-    L1SampleRatio = (1.023*10**6)/(4.092*10**6)
+    L1SampleRatio = (1.023*10**6)/(GPS_fs)
     curSatInfo.CodePhaseChips = 1023 - L1SampleRatio*curSatInfo.CodePhaseSamples
 
     # Check if Acquisition was successful for this satellite

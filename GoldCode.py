@@ -70,5 +70,9 @@ def getAcquisitionCode(sat, spc):
     '''
     Returns a code ready to be used by Acquisition.py
     '''
-    return getCode(1023, samplesPerChip = spc, prn = sats[sat-1])
+    code = np.array(getCode(1023, samplesPerChip = 1, prn = sats[sat-1]),dtype=int)
+    chip_per_sample = 1.0 / spc
+    t = np.arange(0, 1023, chip_per_sample)
+    idx = np.floor(t).astype(int)
+    return code[idx]
 
