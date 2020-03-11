@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "prn.h"
+#include "prns.h"
 
 static void usage(char *name)
 {

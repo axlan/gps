@@ -1,5 +1,5 @@
 #include <assert.h>
-#include "prn.h"
+#include "prns.h"
 
 /* G2 shift register delay for each PRN is specified in IS-GPS-200,
  * table 3-I. It's stored time-reversed here: the spec is for the number

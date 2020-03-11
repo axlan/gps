@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "dsp.h"
-#include "prn.h"
+#include "prns.h"
 
 #define TRACE 0
 
